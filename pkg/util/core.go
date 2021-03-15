@@ -12,6 +12,7 @@ import (
 	"runtime/debug"
 
 	"github.com/DataDog/datadog-agent/pkg/config"
+	"github.com/DataDog/datadog-agent/pkg/util/log"
 	"golang.org/x/sys/unix"
 )
 
@@ -28,6 +29,8 @@ func SetupCoreDump() error {
 		if err != nil {
 			return fmt.Errorf("Failed to set ulimit for core dumps: %s", err)
 		}
+
+		log.Info("Correctly set core dump")
 	}
 
 	return nil

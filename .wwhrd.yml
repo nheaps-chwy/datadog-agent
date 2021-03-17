@@ -20,6 +20,9 @@ exceptions: # Exclude all tools and tool dependencies
   - "github.com/client9/misspell/cmd/misspell"
   - "github.com/frapposelli/wwhrd"
   - "github.com/fzipp/gocyclo"
+  - "github.com/go-enry/go-license-detector/v4/..."
+  - "github.com/go-enry/go-license-detector/v4/cmd/license-detector/..."
+  - "github.com/go-enry/go-license-detector/v4/licensedb/..."
   - "github.com/golangci/..."
   - "github.com/gordonklaus/ineffassign"
   - "github.com/goware/modvendor"
@@ -45,3 +48,6 @@ exceptions: # Exclude all tools and tool dependencies
   - "github.com/matoous/godox"
   - "github.com/go-critic/go-critic/checkers/..."
   - "golang.org/x/mod/..."
+
+additional:
+  - "github.com/golang/go"

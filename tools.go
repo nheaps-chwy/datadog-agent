@@ -14,9 +14,11 @@ import (
 	_ "github.com/client9/misspell/cmd/misspell"
 	_ "github.com/frapposelli/wwhrd"
 	_ "github.com/fzipp/gocyclo"
+	_ "github.com/go-enry/go-license-detector/v4/cmd/license-detector"
 	_ "github.com/golangci/golangci-lint/cmd/golangci-lint"
 	_ "github.com/gordonklaus/ineffassign"
 	_ "github.com/goware/modvendor"
+	_ "github.com/mailru/easyjson/easyjson"
 	_ "github.com/shuLhan/go-bindata/cmd/go-bindata"
 	_ "github.com/stretchr/testify"
 	_ "golang.org/x/lint/golint"
@@ -30,5 +32,4 @@ import (
 	_ "golang.org/x/tools/go/gcexportdata"
 	_ "gotest.tools/gotestsum"
 	_ "honnef.co/go/tools/cmd/staticcheck"
-	_ "github.com/mailru/easyjson/easyjson"
 )

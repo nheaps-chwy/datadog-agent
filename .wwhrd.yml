@@ -50,4 +50,5 @@ exceptions: # Exclude all tools and tool dependencies
   - "golang.org/x/mod/..."
 
 additional:
-  - "github.com/golang/go"
+  # list here paths to additional licenses
+  golang/go: "raw.githubusercontent.com/golang/go/master/LICENSE"

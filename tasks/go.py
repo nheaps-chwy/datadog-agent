@@ -6,7 +6,6 @@ Golang related tasks go here
 import datetime
 import os
 import shutil
-import sys
 import tempfile
 import json
 from urllib.parse import urlparse
@@ -425,7 +424,7 @@ def get_licenses_list(ctx):
                             # we get the first match
                             license = project['matches'][0]['license']
                             licenses.append("core,\"{}\",{}".format(pkg, license))
-        except RequestException as e:
+        except RequestException:
             continue
 
     licenses.sort()

@@ -4,17 +4,17 @@ Golang related tasks go here
 
 
 import datetime
+import json
 import os
 import shutil
 import tempfile
-import json
 from urllib.parse import urlparse
 
-import yaml
 import requests
-from requests.exceptions import RequestException
+import yaml
 from invoke import task
 from invoke.exceptions import Exit
+from requests.exceptions import RequestException
 
 from .build_tags import get_default_build_tags
 from .utils import get_build_flags
@@ -51,6 +51,7 @@ MISSPELL_IGNORED_TARGETS = [
 
 # Packages that need go:generate
 GO_GENERATE_TARGETS = ["./pkg/status", "./cmd/agent/gui"]
+
 
 @task
 def fmt(ctx, targets, fail_on_fmt=False):
@@ -414,7 +415,11 @@ def get_licenses_list(ctx):
                     lfp.flush()
 
                     temp_path = os.path.dirname(lfp.name)
-                    result = ctx.run("go run github.com/go-enry/go-license-detector/v4/cmd/license-detector -f json {}".format(temp_path))
+                    result = ctx.run(
+                        "go run github.com/go-enry/go-license-detector/v4/cmd/license-detector -f json {}".format(
+                            temp_path
+                        )
+                    )
                     if result.stdout:
                         results = json.loads(result.stdout)
                         for project in results:
@@ -425,6 +430,7 @@ def get_licenses_list(ctx):
                             license = project['matches'][0]['license']
                             licenses.append("core,\"{}\",{}".format(pkg, license))
         except RequestException:
+            print("There was an issue reaching license {} for pkg {}".format(pkg, lic))
             continue
 
     licenses.sort()

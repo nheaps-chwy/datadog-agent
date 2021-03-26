@@ -220,8 +220,8 @@ type BufferedAggregator struct {
 	checkSamplers map[check.ID]*CheckSampler
 	serviceChecks metrics.ServiceChecks
 	events        metrics.Events
-	// buffer of event platform events used only in case
-	eventPlatformEvents    []senderEventPlatformEvent
+	// buffer of event platform events used only for debugging with manual checks
+	eventPlatformEvents    []EventPlatformDebugEvent
 	flushInterval          time.Duration
 	mu                     sync.Mutex // to protect the checkSamplers field
 	flushMutex             sync.Mutex // to start multiple flushes in parallel
@@ -399,24 +399,24 @@ func (agg *BufferedAggregator) handleSenderBucket(checkBucket senderHistogramBuc
 }
 
 func (agg *BufferedAggregator) handleEventPlatformEvent(event senderEventPlatformEvent) error {
-	// TODO: do we actually need to lock here?
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
-
 	if agg.eventPlatformForwarder == nil {
 		return errors.New("Event platform forwarder not initialized")
 	}
-	// forward to the forwarder that has its own batching logic
-	// TODO: should this be non-blocking write to avoid blocking the whole aggregator if it's full
+	// TODO: should we add origin info?
 	m := &message.Message{Content: []byte(event.rawEvent)}
 	err := agg.eventPlatformForwarder.SendEventPlatformEvent(m, event.eventType)
 	if err != nil {
 		return err
 	}
 	if agg.flushInterval == 0 {
-		// if flushing is disabled then we want to buffer the events in memory to allow them to be read back out
-		// by the check
-		agg.eventPlatformEvents = append(agg.eventPlatformEvents, event)
+		// If flushing is disabled then we want to buffer the events in memory to allow them to be read back out
+		// by the check command. During normal operation there is no buffering done in the aggregator for these events.
+		agg.eventPlatformEvents = append(agg.eventPlatformEvents, EventPlatformDebugEvent{
+			RawEvent:  event.rawEvent,
+			EventType: event.eventType,
+		})
 	}
 	return nil
 }
@@ -653,27 +653,23 @@ type EventPlatformDebugEvent struct {
 }
 
 // GetEventPlatformEvents grabs the event platform events from the queue and clears them.
-// Note that event platform events are buffered in the queue only in the case where flushing is disabled. During
-// normal operation they are forwarded straight to the rest of the event platform pipeline without buffering in the
-// aggregator.
 // If tryUnmarshalJSON then the raw events will be unmarshalled into JSON if possible before being returned.
-func (agg *BufferedAggregator) GetEventPlatformEvents(tryUnmarshalJSON bool) (results []EventPlatformDebugEvent) {
+func (agg *BufferedAggregator) GetEventPlatformEvents(tryUnmarshalJSON bool) []EventPlatformDebugEvent {
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 	events := agg.eventPlatformEvents
 	agg.eventPlatformEvents = nil
-	// unmarshal the raw events if they are valid JSON
-	for _, e := range events {
-		d := EventPlatformDebugEvent{EventType: e.eventType, RawEvent: e.rawEvent}
+	// unmarshal the raw events if they are valid JSON to make for more human readable output from the check command
+	for i, e := range events {
 		if tryUnmarshalJSON {
-			err := json.Unmarshal([]byte(d.RawEvent), &d.UnmarshalledEvent)
+			err := json.Unmarshal([]byte(e.RawEvent), &e.UnmarshalledEvent)
 			if err == nil {
-				d.RawEvent = ""
+				e.RawEvent = ""
 			}
 		}
-		results = append(results, d)
+		events[i] = e
 	}
-	return results
+	return events
 }
 
 func (agg *BufferedAggregator) sendEvents(start time.Time, events metrics.Events) {
@@ -725,7 +721,7 @@ func (agg *BufferedAggregator) Flush(start time.Time, waitForSerializer bool) {
 	// Event Platform Events are forwarded continuously instead of being buffered/aggregated in memory like the other
 	// types of telemetry. They are buffered in memory only when flushing is disabled to allow the agent check command
 	// to read them out. Even though they are not buffered in memory under normal operation we still trigger a flush
-	// here just in case to prevent endless growth in case the aggregator is being misused somehow.
+	// here to prevent endless growth just in case the aggregator is being misused somehow.
 	agg.GetEventPlatformEvents(false)
 }
 

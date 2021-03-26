@@ -8,7 +8,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"github.com/DataDog/datadog-agent/pkg/logs/epforwarder"
 	"runtime"
 	"syscall"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/DataDog/datadog-agent/pkg/dogstatsd"
 	"github.com/DataDog/datadog-agent/pkg/forwarder"
 	"github.com/DataDog/datadog-agent/pkg/logs"
+	"github.com/DataDog/datadog-agent/pkg/logs/epforwarder"
 	"github.com/DataDog/datadog-agent/pkg/metadata"
 	"github.com/DataDog/datadog-agent/pkg/metadata/host"
 	orchcfg "github.com/DataDog/datadog-agent/pkg/orchestrator/config"

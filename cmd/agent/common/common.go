@@ -10,7 +10,6 @@ package common
 import (
 	"context"
 	"encoding/json"
-	"github.com/DataDog/datadog-agent/pkg/logs/epforwarder"
 	"net/http"
 	"path/filepath"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/DataDog/datadog-agent/pkg/config"
 	"github.com/DataDog/datadog-agent/pkg/dogstatsd"
 	"github.com/DataDog/datadog-agent/pkg/forwarder"
+	"github.com/DataDog/datadog-agent/pkg/logs/epforwarder"
 	"github.com/DataDog/datadog-agent/pkg/metadata"
 	"github.com/DataDog/datadog-agent/pkg/util/executable"
 	"github.com/DataDog/datadog-agent/pkg/version"

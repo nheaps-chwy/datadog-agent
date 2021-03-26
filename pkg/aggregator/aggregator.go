@@ -10,11 +10,11 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
-	"github.com/DataDog/datadog-agent/pkg/logs/epforwarder"
-	"github.com/DataDog/datadog-agent/pkg/logs/message"
 	"sync"
 	"time"
 
+	"github.com/DataDog/datadog-agent/pkg/logs/epforwarder"
+	"github.com/DataDog/datadog-agent/pkg/logs/message"
 	"github.com/DataDog/datadog-agent/pkg/serializer/split"
 	"github.com/DataDog/datadog-agent/pkg/tagger"
 	"github.com/DataDog/datadog-agent/pkg/tagger/collectors"

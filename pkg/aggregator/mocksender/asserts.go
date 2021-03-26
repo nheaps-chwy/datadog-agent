@@ -65,8 +65,7 @@ func (m *MockSender) AssertEvent(t *testing.T, expectedEvent metrics.Event, allo
 	return m.Mock.AssertCalled(t, "Event", MatchEventLike(expectedEvent, allowedDelta))
 }
 
-// AssertEventPlatformEvent assert the expectedEvent was emitted with the following values
-// RawEvent, EventType
+// AssertEventPlatformEvent assert the expected event was emitted with the following values
 func (m *MockSender) AssertEventPlatformEvent(t *testing.T, expectedRawEvent string, expectedEventType string) bool {
 	return m.Mock.AssertCalled(t, "EventPlatformEvent", expectedRawEvent, expectedEventType)
 }

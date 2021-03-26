@@ -146,8 +146,6 @@ func NewEventPlatformForwarder() EventPlatformForwarder {
 		pipelines[eventType] = p
 	}
 
-	// dbm-metrics
-
 	return &defaultEventPlatformForwarder{
 		pipelines:       pipelines,
 		destinationsCtx: destinationsCtx,

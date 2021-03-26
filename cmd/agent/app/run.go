@@ -8,6 +8,7 @@ package app
 import (
 	"context"
 	"fmt"
+	epforwarder "github.com/DataDog/datadog-agent/pkg/logs/forwarder"
 	"runtime"
 	"syscall"
 
@@ -345,9 +346,14 @@ func StartAgent() error {
 		orchestratorForwarder.Start() //nolint:errcheck
 	}
 
+	common.EventPlatformForwarder = epforwarder.NewEventPlatformForwarder()
+	if common.EventPlatformForwarder != nil {
+		common.EventPlatformForwarder.Start()
+	}
+
 	// setup the aggregator
 	s := serializer.NewSerializer(common.Forwarder, orchestratorForwarder)
-	agg := aggregator.InitAggregator(s, hostname)
+	agg := aggregator.InitAggregator(s, common.EventPlatformForwarder, hostname)
 	agg.AddAgentStartupTelemetry(version.AgentVersion)
 
 	// start dogstatsd
@@ -457,7 +463,9 @@ func StopAgent() {
 	if orchestratorForwarder != nil {
 		orchestratorForwarder.Stop()
 	}
-
+	if common.EventPlatformForwarder != nil {
+		common.EventPlatformForwarder.Stop()
+	}
 	logs.Stop()
 	gui.StopGUIServer()
 	profiler.Stop()

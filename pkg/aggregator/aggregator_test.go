@@ -33,7 +33,7 @@ var checkID2 check.ID = "2"
 func TestRegisterCheckSampler(t *testing.T) {
 	resetAggregator()
 
-	agg := InitAggregator(nil, "")
+	agg := InitAggregator(nil, nil, "")
 	err := agg.registerSender(checkID1)
 	assert.Nil(t, err)
 	assert.Len(t, aggregatorInstance.checkSamplers, 1)
@@ -50,7 +50,7 @@ func TestRegisterCheckSampler(t *testing.T) {
 func TestDeregisterCheckSampler(t *testing.T) {
 	resetAggregator()
 
-	agg := InitAggregator(nil, "")
+	agg := InitAggregator(nil, nil, "")
 	agg.registerSender(checkID1)
 	agg.registerSender(checkID2)
 	assert.Len(t, aggregatorInstance.checkSamplers, 2)
@@ -65,7 +65,7 @@ func TestDeregisterCheckSampler(t *testing.T) {
 
 func TestAddServiceCheckDefaultValues(t *testing.T) {
 	resetAggregator()
-	agg := InitAggregator(nil, "resolved-hostname")
+	agg := InitAggregator(nil, nil, "resolved-hostname")
 
 	agg.addServiceCheck(metrics.ServiceCheck{
 		// leave Host and Ts fields blank
@@ -94,7 +94,7 @@ func TestAddServiceCheckDefaultValues(t *testing.T) {
 
 func TestAddEventDefaultValues(t *testing.T) {
 	resetAggregator()
-	agg := InitAggregator(nil, "resolved-hostname")
+	agg := InitAggregator(nil, nil, "resolved-hostname")
 
 	agg.addEvent(metrics.Event{
 		// only populate required fields
@@ -140,7 +140,7 @@ func TestAddEventDefaultValues(t *testing.T) {
 
 func TestSetHostname(t *testing.T) {
 	resetAggregator()
-	agg := InitAggregator(nil, "hostname")
+	agg := InitAggregator(nil, nil, "hostname")
 	assert.Equal(t, "hostname", agg.hostname)
 	sender, err := GetSender(checkID1)
 	require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestSetHostname(t *testing.T) {
 func TestDefaultData(t *testing.T) {
 	resetAggregator()
 	s := &serializer.MockSerializer{}
-	agg := InitAggregator(s, "hostname")
+	agg := InitAggregator(s, nil, "hostname")
 	start := time.Now()
 
 	s.On("SendServiceChecks", metrics.ServiceChecks{{
@@ -193,7 +193,7 @@ func TestDefaultData(t *testing.T) {
 func TestRecurentSeries(t *testing.T) {
 	resetAggregator()
 	s := &serializer.MockSerializer{}
-	agg := NewBufferedAggregator(s, "hostname", DefaultFlushInterval)
+	agg := NewBufferedAggregator(s, nil, "hostname", DefaultFlushInterval)
 
 	// Add two recurrentSeries
 	AddRecurrentSeries(&metrics.Serie{
@@ -314,7 +314,7 @@ func TestTags(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config.Datadog.Set("basic_telemetry_add_container_tags", tt.tlmContainerTagsEnabled)
-			agg := NewBufferedAggregator(nil, "hostname", time.Second)
+			agg := NewBufferedAggregator(nil, nil, "hostname", time.Second)
 			agg.agentTags = tt.agentTags
 			assert.ElementsMatch(t, tt.want, agg.tags(tt.withVersion))
 		})

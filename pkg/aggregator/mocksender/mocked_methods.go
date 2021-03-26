@@ -65,6 +65,11 @@ func (m *MockSender) Event(e metrics.Event) {
 	m.Called(e)
 }
 
+//EventPlatformEvent enables the event platform event mock call.
+func (m *MockSender) EventPlatformEvent(rawEvent string, eventType string) {
+	m.Called(rawEvent, eventType)
+}
+
 //HistogramBucket enables the histogram bucket mock call.
 func (m *MockSender) HistogramBucket(metric string, value int64, lowerBound, upperBound float64, monotonic bool, hostname string, tags []string) {
 	m.Called(metric, value, lowerBound, upperBound, monotonic, hostname, tags)

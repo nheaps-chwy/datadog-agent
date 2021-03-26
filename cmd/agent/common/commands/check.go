@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	epforwarder "github.com/DataDog/datadog-agent/pkg/logs/forwarder"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -128,9 +129,14 @@ func Check(loggerName config.LoggerName, confFilePath *string, flagNoColor *bool
 				return err
 			}
 
+			common.EventPlatformForwarder = epforwarder.NewEventPlatformForwarder()
+			if common.EventPlatformForwarder != nil {
+				common.EventPlatformForwarder.Start()
+			}
+
 			s := serializer.NewSerializer(common.Forwarder, nil)
 			// Initializing the aggregator with a flush interval of 0 (which disable the flush goroutine)
-			agg := aggregator.InitAggregatorWithFlushInterval(s, hostname, 0)
+			agg := aggregator.InitAggregatorWithFlushInterval(s, common.EventPlatformForwarder, hostname, 0)
 			common.LoadComponents(config.Datadog.GetString("confd_path"))
 
 			if config.Datadog.GetBool("inventories_enabled") {
@@ -529,6 +535,15 @@ func printMetrics(agg *aggregator.BufferedAggregator, checkFileOutput *bytes.Buf
 		fmt.Println(string(j))
 		checkFileOutput.WriteString(string(j) + "\n")
 	}
+
+	eventPlatformEvents := agg.GetEventPlatformEvents(true)
+	if len(eventPlatformEvents) != 0 {
+		fmt.Fprintln(color.Output, fmt.Sprintf("=== %s ===", color.BlueString("Event Platform Events")))
+		checkFileOutput.WriteString("=== Event Platform Events ===\n")
+		j, _ := json.MarshalIndent(eventPlatformEvents, "", "  ")
+		fmt.Println(string(j))
+		checkFileOutput.WriteString(string(j) + "\n")
+	}
 }
 
 func writeCheckToFile(checkName string, checkFileOutput *bytes.Buffer) {
@@ -579,6 +594,11 @@ func getMetricsData(agg *aggregator.BufferedAggregator) map[string]interface{} {
 	events := agg.GetEvents()
 	if len(events) != 0 {
 		aggData["events"] = events
+	}
+
+	eventPlatformEvents := agg.GetEventPlatformEvents(true)
+	if len(eventPlatformEvents) != 0 {
+		aggData["event_platform_events"] = eventPlatformEvents
 	}
 
 	return aggData

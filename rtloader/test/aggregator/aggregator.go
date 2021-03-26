@@ -46,7 +46,7 @@ var (
 	scName          string
 	scMessage       string
 	rawEvent        string
-	track           string
+	eventType       string
 	_event          *event
 	intValue        int
 	lowerBound      float64
@@ -231,12 +231,8 @@ func submitHistogramBucket(id *C.char, cMetricName *C.char, cVal C.longlong, cLo
 }
 
 //export submitEventPlatformEvent
-func submitEventPlatformEvent(id *C.char, _rawEvent *C.char, _track *C.char) {
+func submitEventPlatformEvent(id *C.char, _rawEvent *C.char, _eventType *C.char) {
 	checkID = C.GoString(id)
 	rawEvent = C.GoString(_rawEvent)
-	track = C.GoString(_track)
-	switch track {
-	case "dev-track":
-		return
-	}
+	eventType = C.GoString(_eventType)
 }

@@ -8,7 +8,7 @@ package app
 import (
 	"context"
 	"fmt"
-	epforwarder "github.com/DataDog/datadog-agent/pkg/logs/forwarder"
+	"github.com/DataDog/datadog-agent/pkg/logs/epforwarder"
 	"runtime"
 	"syscall"
 

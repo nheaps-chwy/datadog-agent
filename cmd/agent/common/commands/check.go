@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	epforwarder "github.com/DataDog/datadog-agent/pkg/logs/forwarder"
+	"github.com/DataDog/datadog-agent/pkg/logs/epforwarder"
 	"io/ioutil"
 	"os"
 	"path/filepath"

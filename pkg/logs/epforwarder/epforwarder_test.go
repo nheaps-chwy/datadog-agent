@@ -1,4 +1,4 @@
-package forwarder
+package epforwarder
 
 import (
 	"github.com/DataDog/datadog-agent/pkg/logs/message"

@@ -216,12 +216,11 @@ type BufferedAggregator struct {
 	// Used by the Dogstatsd Batcher.
 	MetricSamplePool *metrics.MetricSamplePool
 
-	statsdSampler TimeSampler
-	checkSamplers map[check.ID]*CheckSampler
-	serviceChecks metrics.ServiceChecks
-	events        metrics.Events
-	// buffer of event platform events used only for debugging with manual checks
-	eventPlatformEvents    []EventPlatformDebugEvent
+	statsdSampler          TimeSampler
+	checkSamplers          map[check.ID]*CheckSampler
+	serviceChecks          metrics.ServiceChecks
+	events                 metrics.Events
+	eventPlatformEvents    []EventPlatformDebugEvent // buffer of event platform events used only for debugging with manual checks
 	flushInterval          time.Duration
 	mu                     sync.Mutex // to protect the checkSamplers field
 	flushMutex             sync.Mutex // to start multiple flushes in parallel
@@ -402,9 +401,8 @@ func (agg *BufferedAggregator) handleEventPlatformEvent(event senderEventPlatfor
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 	if agg.eventPlatformForwarder == nil {
-		return errors.New("Event platform forwarder not initialized")
+		return errors.New("event platform forwarder not initialized")
 	}
-	// TODO: should we add origin info?
 	m := &message.Message{Content: []byte(event.rawEvent)}
 	err := agg.eventPlatformForwarder.SendEventPlatformEvent(m, event.eventType)
 	if err != nil {
@@ -659,7 +657,6 @@ func (agg *BufferedAggregator) GetEventPlatformEvents(tryUnmarshalJSON bool) []E
 	defer agg.mu.Unlock()
 	events := agg.eventPlatformEvents
 	agg.eventPlatformEvents = nil
-	// unmarshal the raw events if they are valid JSON to make for more human readable output from the check command
 	for i, e := range events {
 		if tryUnmarshalJSON {
 			err := json.Unmarshal([]byte(e.RawEvent), &e.UnmarshalledEvent)

@@ -32,7 +32,7 @@ type defaultEventPlatformForwarder struct {
 func (s *defaultEventPlatformForwarder) SendEventPlatformEvent(e *message.Message, eventType string) error {
 	p, ok := s.pipelines[eventType]
 	if !ok {
-		return fmt.Errorf("unknown event type: %s", eventType)
+		return fmt.Errorf("unknown eventType=%s", eventType)
 	}
 	select {
 	case p.in <- e:
@@ -50,6 +50,7 @@ func (s *defaultEventPlatformForwarder) Start() {
 }
 
 func (s *defaultEventPlatformForwarder) Stop() {
+	log.Debugf("shutting down event platform forwarder")
 	stopper := restart.NewParallelStopper()
 	for _, p := range s.pipelines {
 		stopper.Add(p)
@@ -57,6 +58,7 @@ func (s *defaultEventPlatformForwarder) Stop() {
 	stopper.Stop()
 	// TODO: wait on stop and cancel context only after timeout like logs agent
 	s.destinationsCtx.Stop()
+	log.Debugf("event platform forwarder shut down complete")
 }
 
 type passthroughPipeline struct {
@@ -65,6 +67,8 @@ type passthroughPipeline struct {
 	auditor auditor.Auditor
 }
 
+// newHTTPPassthroughPipeline creates a new HTTP-only event platform pipeline that sends messages directly to intake
+// without any of the processing that exists in regular logs pipelines.
 func newHTTPPassthroughPipeline(endpoints *config.Endpoints, destinationsContext *client.DestinationsContext) (p *passthroughPipeline, err error) {
 	if !endpoints.UseHTTP {
 		return p, fmt.Errorf("endpoints must be http")
@@ -103,9 +107,9 @@ func joinHosts(endpoints []config.Endpoint) string {
 	return strings.Join(additionalHosts, ",")
 }
 
+// newDbmSamplesPipeline creates a new "deep database monitoring" samples pipeline
 func newDbmSamplesPipeline(destinationsContext *client.DestinationsContext) (eventType string, p *passthroughPipeline, err error) {
 	eventType = eventTypeDBMSample
-
 	configKeys := config.LogsConfigKeys{
 		CompressionLevel:        "database_monitoring.samples.compression_level",
 		ConnectionResetInterval: "database_monitoring.samples.connection_reset_interval",
@@ -116,25 +120,20 @@ func newDbmSamplesPipeline(destinationsContext *client.DestinationsContext) (eve
 		BatchWait:               "database_monitoring.samples.batch_wait",
 		BatchMaxConcurrentSend:  "database_monitoring.samples.batch_max_concurrent_send",
 	}
-
 	endpoints, err := config.BuildHTTPEndpointsWithConfig(configKeys, "dbquery-http-intake.logs.")
 	if err != nil {
 		return eventType, nil, err
 	}
-
 	// since we expect DBM events to be potentially very high throughput if a single agent is monitoring a large number
 	// of hosts, we increase the default batch send concurrency
 	if endpoints.BatchMaxConcurrentSend <= 0 {
 		endpoints.BatchMaxConcurrentSend = 10
 	}
-
 	p, err = newHTTPPassthroughPipeline(endpoints, destinationsContext)
 	if err != nil {
 		return eventType, nil, err
 	}
-
 	log.Debugf("Initialized event platform forwarder pipeline. eventType=%s mainHost=%s additionalHosts=%s batch_max_concurrent_send=%d", eventTypeDBMSample, endpoints.Main.Host, joinHosts(endpoints.Additionals), endpoints.BatchMaxConcurrentSend)
-
 	return eventType, p, nil
 }
 

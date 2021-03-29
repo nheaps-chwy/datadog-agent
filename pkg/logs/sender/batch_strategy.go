@@ -23,10 +23,11 @@ const (
 
 // batchStrategy contains all the logic to send logs in batch.
 type batchStrategy struct {
-	buffer     *MessageBuffer
-	serializer Serializer
-	batchWait  time.Duration
-	climit     chan struct{} // semaphore for limiting concurrent sends
+	buffer       *MessageBuffer
+	serializer   Serializer
+	batchWait    time.Duration
+	climit       chan struct{}  // semaphore for limiting concurrent sends
+	pendingSends sync.WaitGroup // waitgroup for concurrent sends
 }
 
 // NewBatchStrategy returns a new batch concurrent strategy that will send at most `maxConcurrent` batches in parallel.
@@ -74,6 +75,7 @@ func (s *batchStrategy) Send(inputChan chan *message.Message, outputChan chan *m
 	flushTimer := time.NewTimer(s.batchWait)
 	defer func() {
 		flushTimer.Stop()
+		s.pendingSends.Wait()
 	}()
 
 	for {
@@ -130,9 +132,11 @@ func (s *batchStrategy) sendBuffer(outputChan chan *message.Message, send func([
 		return
 	}
 	s.climit <- struct{}{}
+	s.pendingSends.Add(1)
 	go func() {
-		<-s.climit
 		s.sendMessages(messages, outputChan, send)
+		s.pendingSends.Done()
+		<-s.climit
 	}()
 }
 

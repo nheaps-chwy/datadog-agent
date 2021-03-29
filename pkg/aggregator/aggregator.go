@@ -413,6 +413,8 @@ func (agg *BufferedAggregator) handleEventPlatformEvent(event senderEventPlatfor
 	if agg.flushInterval == 0 {
 		// If flushing is disabled then we want to buffer the events in memory to allow them to be read back out
 		// by the check command. During normal operation there is no buffering done in the aggregator for these events.
+		// We only buffer events that were successfully sent to the eventPlatformForwarder in order to aid local
+		// debugging in case of immediate errors, like sending an unsupported eventType.
 		agg.eventPlatformEvents = append(agg.eventPlatformEvents, EventPlatformDebugEvent{
 			RawEvent:  event.rawEvent,
 			EventType: event.eventType,

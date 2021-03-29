@@ -34,12 +34,11 @@ func (s *defaultEventPlatformForwarder) SendEventPlatformEvent(e *message.Messag
 	if !ok {
 		return fmt.Errorf("unknown event type: %s", eventType)
 	}
-	// TODO: is non-blocking write here a good idea? If an agent is monitoring a lot of databases might this get full?
 	select {
 	case p.in <- e:
 		return nil
 	default:
-		return fmt.Errorf("pipeline channel for eventType %s is full", eventType)
+		return fmt.Errorf("event platform forwarder pipeline channel is full for eventType=%s. consider increasing batch_max_concurrent_send", eventType)
 	}
 }
 
@@ -61,7 +60,6 @@ func (s *defaultEventPlatformForwarder) Stop() {
 }
 
 type passthroughPipeline struct {
-	// TODO: do we need to parallelize sending? If a single agent has some massive number of checks is this necessary?
 	sender  *sender.Sender
 	in      chan *message.Message
 	auditor auditor.Auditor
@@ -77,8 +75,8 @@ func newHTTPPassthroughPipeline(endpoints *config.Endpoints, destinationsContext
 		additionals = append(additionals, http.NewDestination(endpoint, http.JSONContentType, destinationsContext))
 	}
 	destinations := client.NewDestinations(main, additionals)
-	inputChan := make(chan *message.Message, config.ChanSize)
-	strategy := sender.NewBatchStrategy(sender.ArraySerializer, endpoints.BatchWait)
+	inputChan := make(chan *message.Message, 100)
+	strategy := sender.NewBatchStrategy(sender.ArraySerializer, endpoints.BatchWait, endpoints.BatchMaxConcurrentSend)
 	a := auditor.NewNullAuditor()
 	return &passthroughPipeline{
 		sender:  sender.NewSender(inputChan, a.Channel(), destinations, strategy),
@@ -116,6 +114,7 @@ func newDbmSamplesPipeline(destinationsContext *client.DestinationsContext) (eve
 		DevModeNoSSL:            "database_monitoring.samples.dev_mode_no_ssl",
 		AdditionalEndpoints:     "database_monitoring.samples.additional_endpoints",
 		BatchWait:               "database_monitoring.samples.batch_wait",
+		BatchMaxConcurrentSend:  "database_monitoring.samples.batch_max_concurrent_send",
 	}
 
 	endpoints, err := config.BuildHTTPEndpointsWithConfig(configKeys, "dbquery-http-intake.logs.")
@@ -123,12 +122,18 @@ func newDbmSamplesPipeline(destinationsContext *client.DestinationsContext) (eve
 		return eventType, nil, err
 	}
 
+	// since we expect DBM events to be potentially very high throughput if a single agent is monitoring a large number
+	// of hosts, we increase the default batch send concurrency
+	if endpoints.BatchMaxConcurrentSend <= 0 {
+		endpoints.BatchMaxConcurrentSend = 10
+	}
+
 	p, err = newHTTPPassthroughPipeline(endpoints, destinationsContext)
 	if err != nil {
 		return eventType, nil, err
 	}
 
-	log.Debugf("Initialized event platform forwarder pipeline. eventType=%s mainHost=%s additionalHosts=%s", eventTypeDBMSample, endpoints.Main.Host, joinHosts(endpoints.Additionals))
+	log.Debugf("Initialized event platform forwarder pipeline. eventType=%s mainHost=%s additionalHosts=%s batch_max_concurrent_send=%d", eventTypeDBMSample, endpoints.Main.Host, joinHosts(endpoints.Additionals), endpoints.BatchMaxConcurrentSend)
 
 	return eventType, p, nil
 }

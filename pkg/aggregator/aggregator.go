@@ -125,8 +125,10 @@ var (
 		nil, "Count the number of dogstatsd contexts in the aggregator")
 
 	// Hold series to be added to aggregated series on each flush
-	recurrentSeries     metrics.Series
-	recurrentSeriesLock sync.Mutex
+	recurrentSeries                       metrics.Series
+	recurrentSeriesLock                   sync.Mutex
+	aggregatorEventPlatformLastError      error
+	aggregatorEventPlatformLastErrorCount int64
 )
 
 func init() {
@@ -722,6 +724,16 @@ func (agg *BufferedAggregator) Flush(start time.Time, waitForSerializer bool) {
 	agg.GetEventPlatformEvents(false)
 }
 
+func (agg *BufferedAggregator) logPostFlushMessages() {
+	if aggregatorEventPlatformLastError != nil {
+		// periodic logging of event platform event sending errors
+		failedCount := aggregatorEventPlatformErrors.Value() - aggregatorEventPlatformLastErrorCount
+		log.Errorf("Failed to process some event platform events. failed_count=%d last_error='%s'", failedCount, aggregatorEventPlatformLastError.Error())
+		aggregatorEventPlatformLastErrorCount = aggregatorEventPlatformErrors.Value()
+		aggregatorEventPlatformLastError = nil
+	}
+}
+
 // Stop stops the aggregator. Based on 'flushData' waiting metrics (from checks
 // or closed dogstatsd buckets) will be sent to the serializer before stopping.
 func (agg *BufferedAggregator) Stop() {
@@ -764,6 +776,7 @@ func (agg *BufferedAggregator) run() {
 			agg.Flush(start, false)
 			addFlushTime("MainFlushTime", int64(time.Since(start)))
 			aggregatorNumberOfFlush.Add(1)
+			agg.logPostFlushMessages()
 		case checkMetric := <-agg.checkMetricIn:
 			aggregatorChecksMetricSample.Add(1)
 			tlmProcessed.Inc("metrics")
@@ -837,7 +850,7 @@ func (agg *BufferedAggregator) run() {
 			tlmProcessed.Add(1, "event_platform_events")
 			err := agg.handleEventPlatformEvent(event)
 			if err != nil {
-				log.Errorf("Failed to process event platform event: %s", err.Error())
+				aggregatorEventPlatformLastError = err
 				aggregatorEventPlatformErrors.Add(1)
 			}
 		}

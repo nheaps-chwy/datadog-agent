@@ -26,14 +26,20 @@ type batchStrategy struct {
 	buffer     *MessageBuffer
 	serializer Serializer
 	batchWait  time.Duration
+	climit     chan struct{} // semaphore for limiting concurrent sends
 }
 
-// NewBatchStrategy returns a new batchStrategy.
-func NewBatchStrategy(serializer Serializer, batchWait time.Duration) Strategy {
+// NewBatchStrategy returns a new batch concurrent strategy that will send at most `maxConcurrent` batches in parallel.
+func NewBatchStrategy(serializer Serializer, batchWait time.Duration, maxConcurrent int) Strategy {
+	var climit chan struct{}
+	if maxConcurrent > 1 {
+		climit = make(chan struct{}, maxConcurrent)
+	}
 	return &batchStrategy{
 		buffer:     NewMessageBuffer(maxBatchSize, maxContentSize),
 		serializer: serializer,
 		batchWait:  batchWait,
+		climit:     climit,
 	}
 }
 
@@ -117,10 +123,20 @@ func (s *batchStrategy) sendBuffer(outputChan chan *message.Message, send func([
 	if s.buffer.IsEmpty() {
 		return
 	}
-
 	messages := s.buffer.GetMessages()
 	defer s.buffer.Clear()
+	if s.climit == nil {
+		s.sendMessages(messages, outputChan, send)
+		return
+	}
+	s.climit <- struct{}{}
+	go func() {
+		<-s.climit
+		s.sendMessages(messages, outputChan, send)
+	}()
+}
 
+func (s *batchStrategy) sendMessages(messages []*message.Message, outputChan chan *message.Message, send func([]byte) error) {
 	err := send(s.serializer.Serialize(messages))
 	if err != nil {
 		if shouldStopSending(err) {

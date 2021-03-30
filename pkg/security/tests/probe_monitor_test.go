@@ -23,12 +23,9 @@ import (
 )
 
 func TestProbeMonitor(t *testing.T) {
-	var truncatedParents, truncatedSegment string
+	var truncatedParents string
 	for i := 0; i <= model.MaxPathDepth; i++ {
 		truncatedParents += "a/"
-	}
-	for i := 0; i <= model.MaxSegmentLength+1; i++ {
-		truncatedSegment += "a"
 	}
 
 	rule := &rules.RuleDefinition{
@@ -47,11 +44,6 @@ func TestProbeMonitor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	truncatedSegmentFile, truncatedSegmentFilePtr, err := test.Path(fmt.Sprintf("%s/test-open", truncatedSegment))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	t.Run("ruleset_loaded", func(t *testing.T) {
 		test.Close()
 		test, err = newTestModule(nil, []*rules.RuleDefinition{rule}, probeMonitorOpts)
@@ -66,27 +58,6 @@ func TestProbeMonitor(t *testing.T) {
 		} else {
 			if ruleEvent.RuleID != probe.RulesetLoadedRuleID {
 				t.Errorf("expected %s rule, got %s", probe.RulesetLoadedRuleID, ruleEvent.RuleID)
-			}
-		}
-	})
-
-	t.Run("truncated_segment", func(t *testing.T) {
-		if os.MkdirAll(path.Dir(truncatedSegmentFile), 0755) != nil {
-			t.Fatal(err)
-		}
-		fd, _, errno := syscall.Syscall(syscall.SYS_OPEN, uintptr(truncatedSegmentFilePtr), syscall.O_CREAT, 0755)
-		if errno != 0 {
-			t.Fatal(error(errno))
-		}
-		defer os.Remove(truncatedSegmentFile)
-		defer syscall.Close(int(fd))
-
-		ruleEvent, err := test.GetProbeCustomEvent(3*time.Second, model.CustomTruncatedSegmentEventType.String())
-		if err != nil {
-			t.Error(err)
-		} else {
-			if ruleEvent.RuleID != probe.AbnormalPathRuleID {
-				t.Errorf("expected %s rule, got %s", probe.AbnormalPathRuleID, ruleEvent.RuleID)
 			}
 		}
 	})

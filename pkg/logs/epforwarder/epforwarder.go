@@ -103,10 +103,10 @@ func newHTTPPassthroughPipeline(
 	if endpoints.BatchMaxConcurrentSend <= 0 {
 		endpoints.BatchMaxConcurrentSend = 10
 	}
-	main := http.NewDestination(endpoints.Main, http.JSONContentType, destinationsContext)
+	main := http.NewDestination(endpoints.Main, http.JSONContentType, destinationsContext, endpoints.BatchMaxConcurrentSend)
 	additionals := []client.Destination{}
 	for _, endpoint := range endpoints.Additionals {
-		additionals = append(additionals, http.NewDestination(endpoint, http.JSONContentType, destinationsContext))
+		additionals = append(additionals, http.NewDestination(endpoint, http.JSONContentType, destinationsContext, endpoints.BatchMaxConcurrentSend))
 	}
 	destinations := client.NewDestinations(main, additionals)
 	inputChan := make(chan *message.Message, 100)

@@ -71,9 +71,37 @@ type passthroughPipeline struct {
 
 // newHTTPPassthroughPipeline creates a new HTTP-only event platform pipeline that sends messages directly to intake
 // without any of the processing that exists in regular logs pipelines.
-func newHTTPPassthroughPipeline(endpoints *config.Endpoints, destinationsContext *client.DestinationsContext) (p *passthroughPipeline, err error) {
+func newHTTPPassthroughPipeline(
+	eventType string,
+	endpointsConfigPrefix string,
+	hostnameEndpointPrefix string,
+	destinationsContext *client.DestinationsContext) (p *passthroughPipeline, err error) {
+	defer func() {
+		if err != nil {
+			log.Errorf("Failed to initialize event platform forwarder pipeline. eventType=%s, error=%s", eventType, err.Error())
+		}
+	}()
+	configKeys := config.LogsConfigKeys{
+		CompressionLevel:        endpointsConfigPrefix + ".compression_level",
+		ConnectionResetInterval: endpointsConfigPrefix + ".connection_reset_interval",
+		LogsDDURL:               endpointsConfigPrefix + ".logs_dd_url",
+		DDURL:                   endpointsConfigPrefix + ".dd_url",
+		DevModeNoSSL:            endpointsConfigPrefix + ".dev_mode_no_ssl",
+		AdditionalEndpoints:     endpointsConfigPrefix + ".additional_endpoints",
+		BatchWait:               endpointsConfigPrefix + ".batch_wait",
+		BatchMaxConcurrentSend:  endpointsConfigPrefix + ".batch_max_concurrent_send",
+	}
+	endpoints, err := config.BuildHTTPEndpointsWithConfig(configKeys, hostnameEndpointPrefix)
+	if err != nil {
+		return nil, err
+	}
 	if !endpoints.UseHTTP {
-		return p, fmt.Errorf("endpoints must be http")
+		return nil, fmt.Errorf("endpoints must be http")
+	}
+	// since some of these pipelines can be potentially very high throughput we increase the default batch send concurrency
+	// to ensure they are able to support 1000s of events per second
+	if endpoints.BatchMaxConcurrentSend <= 0 {
+		endpoints.BatchMaxConcurrentSend = 10
 	}
 	main := http.NewDestination(endpoints.Main, http.JSONContentType, destinationsContext)
 	additionals := []client.Destination{}
@@ -84,6 +112,7 @@ func newHTTPPassthroughPipeline(endpoints *config.Endpoints, destinationsContext
 	inputChan := make(chan *message.Message, 100)
 	strategy := sender.NewBatchStrategy(sender.ArraySerializer, endpoints.BatchWait, endpoints.BatchMaxConcurrentSend)
 	a := auditor.NewNullAuditor()
+	log.Debugf("Initialized event platform forwarder pipeline. eventType=%s mainHost=%s additionalHosts=%s batch_max_concurrent_send=%d", eventType, endpoints.Main.Host, joinHosts(endpoints.Additionals), endpoints.BatchMaxConcurrentSend)
 	return &passthroughPipeline{
 		sender:  sender.NewSender(inputChan, a.Channel(), destinations, strategy),
 		in:      inputChan,
@@ -109,47 +138,17 @@ func joinHosts(endpoints []config.Endpoint) string {
 	return strings.Join(additionalHosts, ",")
 }
 
-// newDbmSamplesPipeline creates a new "deep database monitoring" samples pipeline
-func newDbmSamplesPipeline(destinationsContext *client.DestinationsContext) (eventType string, p *passthroughPipeline, err error) {
-	eventType = eventTypeDBMSamples
-	configKeys := config.LogsConfigKeys{
-		CompressionLevel:        "database_monitoring.samples.compression_level",
-		ConnectionResetInterval: "database_monitoring.samples.connection_reset_interval",
-		LogsDDURL:               "database_monitoring.samples.logs_dd_url",
-		DDURL:                   "database_monitoring.samples.dd_url",
-		DevModeNoSSL:            "database_monitoring.samples.dev_mode_no_ssl",
-		AdditionalEndpoints:     "database_monitoring.samples.additional_endpoints",
-		BatchWait:               "database_monitoring.samples.batch_wait",
-		BatchMaxConcurrentSend:  "database_monitoring.samples.batch_max_concurrent_send",
-	}
-	endpoints, err := config.BuildHTTPEndpointsWithConfig(configKeys, "dbquery-http-intake.logs.")
-	if err != nil {
-		return eventType, nil, err
-	}
-	// since we expect DBM events to be potentially very high throughput if a single agent is monitoring a large number
-	// of hosts, we increase the default batch send concurrency
-	if endpoints.BatchMaxConcurrentSend <= 0 {
-		endpoints.BatchMaxConcurrentSend = 10
-	}
-	p, err = newHTTPPassthroughPipeline(endpoints, destinationsContext)
-	if err != nil {
-		return eventType, nil, err
-	}
-	log.Debugf("Initialized event platform forwarder pipeline. eventType=%s mainHost=%s additionalHosts=%s batch_max_concurrent_send=%d", eventType, endpoints.Main.Host, joinHosts(endpoints.Additionals), endpoints.BatchMaxConcurrentSend)
-	return eventType, p, nil
-}
-
 // NewEventPlatformForwarder creates a new EventPlatformForwarder
 func NewEventPlatformForwarder() EventPlatformForwarder {
 	destinationsCtx := client.NewDestinationsContext()
 	destinationsCtx.Start()
 	pipelines := make(map[string]*passthroughPipeline)
 
-	eventType, p, err := newDbmSamplesPipeline(destinationsCtx)
-	if err != nil {
-		log.Errorf("Failed to initialize event platform forwarder pipeline. eventType=%s, error=%s", eventType, err.Error())
-	} else {
-		pipelines[eventType] = p
+	if p, err := newHTTPPassthroughPipeline(eventTypeDBMSamples, "database_monitoring.samples", "dbquery-http-intake.logs.", destinationsCtx); err == nil {
+		pipelines[eventTypeDBMSamples] = p
+	}
+	if p, err := newHTTPPassthroughPipeline(eventTypeDBMMetrics, "database_monitoring.metrics", "dbmetrics-http-intake.logs.", destinationsCtx); err == nil {
+		pipelines[eventTypeDBMMetrics] = p
 	}
 
 	return &defaultEventPlatformForwarder{

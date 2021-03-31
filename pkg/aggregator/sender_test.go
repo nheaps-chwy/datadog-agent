@@ -470,9 +470,9 @@ func TestCheckSenderInterface(t *testing.T) {
 	assert.Equal(t, []string{"foo", "bar"}, histogramBucket.bucket.Tags)
 
 	eventPlatformEvent := <-s.eventPlatformEventChan
-	assert.Equal(t, checkID1, eventPlatformEvent.Id)
+	assert.Equal(t, checkID1, eventPlatformEvent.id)
 	assert.Equal(t, "raw-event", eventPlatformEvent.rawEvent)
-	assert.Equal(t, "dbm-sample", eventPlatformEvent.EventType)
+	assert.Equal(t, "dbm-sample", eventPlatformEvent.eventType)
 }
 
 func TestCheckSenderHostname(t *testing.T) {

@@ -53,7 +53,7 @@ func (c *ECSFargateCollector) parseMetadata(meta *v2.Task, parseAll bool) ([]*Ta
 			tags.AddLow("ecs_cluster_name", clusterName)
 
 			// aws region from cluster arn
-			region := parseFargateRegion(meta.ClusterName)
+			region := parseFargateRegion(meta.TaskARN)
 			if region != "" {
 				tags.AddLow("region", region)
 			}

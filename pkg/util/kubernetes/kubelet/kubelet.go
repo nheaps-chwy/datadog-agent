@@ -45,6 +45,7 @@ type KubeUtil struct {
 	initRetry retry.Retrier
 
 	kubeletClient          *kubeletClient
+	queryTimeout           time.Duration
 	rawConnectionInfo      map[string]string // kept to pass to the python kubelet check
 	podListCacheDuration   time.Duration
 	filter                 *containers.Filter
@@ -59,7 +60,9 @@ func (ku *KubeUtil) init() error {
 		return err
 	}
 
-	ku.kubeletClient, err = getKubeletClient(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), ku.queryTimeout)
+	defer cancel()
+	ku.kubeletClient, err = getKubeletClient(ctx)
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ package kubelet
 import (
 	"context"
 	"testing"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
@@ -57,6 +58,7 @@ func (suite *KubeletOrchestratorTestSuite) TestGetRawLocalPodList() {
 	mockConfig.Set("kubernetes_http_kubelet_port", kubeletPort)
 	mockConfig.Set("kubelet_tls_verify", false)
 	mockConfig.Set("kubelet_auth_token_path", "")
+	mockConfig.Set("kubelet_query_timeout", 30*time.Second)
 
 	kubeutil, err := GetKubeUtil()
 	require.Nil(suite.T(), err)

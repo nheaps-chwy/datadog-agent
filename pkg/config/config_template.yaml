@@ -1864,6 +1864,11 @@ api_key:
 #
 # kubelet_listener_polling_interval: 5
 
+## @param kubelet_query_timeout - integer - optional - default: 30
+## Configure the timeout in seconds for querying the kubelet.
+#
+# kubelet_query_timeout: 30
+
 {{ end -}}
 {{- if .KubeApiServer }}
 

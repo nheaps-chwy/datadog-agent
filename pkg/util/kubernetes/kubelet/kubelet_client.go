@@ -142,7 +142,7 @@ func (kc *kubeletClient) query(ctx context.Context, path string) ([]byte, int, e
 func getKubeletClient(ctx context.Context) (*kubeletClient, error) {
 	var err error
 
-	kubeletTimeout := 30 * time.Second
+	kubeletTimeout := config.Datadog.GetDuration("kubelet_query_timeout") * time.Second
 	kubeletProxyEnabled := config.Datadog.GetBool("eks_fargate")
 	kubeletHost := config.Datadog.GetString("kubernetes_kubelet_host")
 	kubeletHTTPSPort := config.Datadog.GetInt("kubernetes_https_kubelet_port")

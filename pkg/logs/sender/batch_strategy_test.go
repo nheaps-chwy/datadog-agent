@@ -17,11 +17,16 @@ import (
 )
 
 // newBatchStrategyWithLimits returns a new batchStrategy.
-func newBatchStrategyWithLimits(serializer Serializer, batchSize int, contentSize int, batchWait time.Duration) Strategy {
+func newBatchStrategyWithLimits(serializer Serializer, batchSize int, contentSize int, batchWait time.Duration, maxConcurrent int) Strategy {
+	var climit chan struct{}
+	if maxConcurrent > 1 {
+		climit = make(chan struct{}, maxConcurrent)
+	}
 	return &batchStrategy{
 		buffer:     NewMessageBuffer(batchSize, contentSize),
 		serializer: serializer,
 		batchWait:  batchWait,
+		climit:     climit,
 	}
 }
 
@@ -37,7 +42,7 @@ func TestBatchStrategySendsPayloadWhenBufferIsFull(t *testing.T) {
 		return nil
 	}
 
-	go newBatchStrategyWithLimits(LineSerializer, 2, 2, 100*time.Millisecond).Send(input, output, success, &mu)
+	go newBatchStrategyWithLimits(LineSerializer, 2, 2, 100*time.Millisecond, 0).Send(input, output, success, &mu)
 
 	content = []byte("a\nb")
 
@@ -101,7 +106,7 @@ func TestBatchStrategySendsPayloadWhenClosingInput(t *testing.T) {
 		return nil
 	}
 
-	go newBatchStrategyWithLimits(LineSerializer, 2, 2, 100*time.Millisecond).Send(input, output, success, &mu)
+	go newBatchStrategyWithLimits(LineSerializer, 2, 2, 100*time.Millisecond, 0).Send(input, output, success, &mu)
 
 	content = []byte("a")
 
@@ -135,7 +140,7 @@ func TestBatchStrategyShouldNotBlockWhenForceStopping(t *testing.T) {
 		close(input)
 	}()
 
-	newBatchStrategyWithLimits(LineSerializer, 2, 2, 100*time.Millisecond).Send(input, output, success, &mu)
+	newBatchStrategyWithLimits(LineSerializer, 2, 2, 100*time.Millisecond, 0).Send(input, output, success, &mu)
 }
 
 func TestBatchStrategyShouldNotBlockWhenStoppingGracefully(t *testing.T) {
@@ -156,5 +161,50 @@ func TestBatchStrategyShouldNotBlockWhenStoppingGracefully(t *testing.T) {
 		assert.Equal(t, message, <-output)
 	}()
 
-	newBatchStrategyWithLimits(LineSerializer, 2, 2, 100*time.Millisecond).Send(input, output, success, &mu)
+	newBatchStrategyWithLimits(LineSerializer, 2, 2, 100*time.Millisecond, 0).Send(input, output, success, &mu)
+}
+
+func TestBatchStrategyConcurrentSends(t *testing.T) {
+	input := make(chan *message.Message)
+	output := make(chan *message.Message)
+	waitChan := make(chan bool)
+	var mu sync.Mutex
+
+	// payload sends are blocked until we've confirmed that the we buffer the correct number of pending payloads
+	stuckSend := func(payload []byte) error {
+		<-waitChan
+		return nil
+	}
+
+	go newBatchStrategyWithLimits(LineSerializer, 1, 100, 100*time.Millisecond, 2).Send(input, output, stuckSend, &mu)
+
+	messages := []*message.Message{
+		// the first two messages will be blocked in concurrent send goroutines
+		message.NewMessage([]byte("a"), nil, "", 0),
+		message.NewMessage([]byte("b"), nil, "", 0),
+		// this message will be read out by the main batch sender loop and will be blocked waiting for one of the
+		// first two concurrent sends to complete
+		message.NewMessage([]byte("c"), nil, "", 0),
+	}
+
+	for _, m := range messages {
+		input <- m
+	}
+
+	select {
+	case input <- message.NewMessage([]byte("c"), nil, "", 0):
+		assert.Fail(t, "should not have been able to write into the channel as the input channel is expected to be backed up due to reaching max concurrent sends")
+	default:
+	}
+
+	// unblock the sends so the messages get processed and sent to output channel
+	close(waitChan)
+
+	var receivedMessages []*message.Message
+	for _, m := range messages {
+		receivedMessages = append(receivedMessages, m)
+	}
+
+	// order in which messages are received here is not deterministic so compare values
+	assert.EqualValues(t, messages, receivedMessages)
 }

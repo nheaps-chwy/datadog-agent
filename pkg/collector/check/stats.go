@@ -6,6 +6,7 @@
 package check
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -14,8 +15,9 @@ import (
 )
 
 const (
-	runCheckFailureTag = "fail"
-	runCheckSuccessTag = "ok"
+	runCheckFailureTag       = "fail"
+	runCheckSuccessTag       = "ok"
+	eventPlatformEventPrefix = "EventPlatformEvent_"
 )
 
 var (
@@ -35,38 +37,42 @@ var (
 
 // Stats holds basic runtime statistics about check instances
 type Stats struct {
-	CheckName            string
-	CheckVersion         string
-	CheckConfigSource    string
-	CheckID              ID
-	TotalRuns            uint64
-	TotalErrors          uint64
-	TotalWarnings        uint64
-	MetricSamples        int64
-	Events               int64
-	ServiceChecks        int64
-	TotalMetricSamples   uint64
-	TotalEvents          uint64
-	TotalServiceChecks   uint64
-	ExecutionTimes       [32]int64 // circular buffer of recent run durations, most recent at [(TotalRuns+31) % 32]
-	AverageExecutionTime int64     // average run duration
-	LastExecutionTime    int64     // most recent run duration, provided for convenience
-	LastSuccessDate      int64     // most recent successful execution date, unix timestamp in seconds
-	LastError            string    // error that occurred in the last run, if any
-	LastWarnings         []string  // warnings that occurred in the last run, if any
-	UpdateTimestamp      int64     // latest update to this instance, unix timestamp in seconds
-	m                    sync.Mutex
-	telemetry            bool // do we want telemetry on this Check
+	CheckName                string
+	CheckVersion             string
+	CheckConfigSource        string
+	CheckID                  ID
+	TotalRuns                uint64
+	TotalErrors              uint64
+	TotalWarnings            uint64
+	MetricSamples            int64
+	Events                   int64
+	ServiceChecks            int64
+	TotalMetricSamples       uint64
+	TotalEvents              uint64
+	TotalServiceChecks       uint64
+	EventPlatformEvents      map[string]int64
+	TotalEventPlatformEvents map[string]int64
+	ExecutionTimes           [32]int64 // circular buffer of recent run durations, most recent at [(TotalRuns+31) % 32]
+	AverageExecutionTime     int64     // average run duration
+	LastExecutionTime        int64     // most recent run duration, provided for convenience
+	LastSuccessDate          int64     // most recent successful execution date, unix timestamp in seconds
+	LastError                string    // error that occurred in the last run, if any
+	LastWarnings             []string  // warnings that occurred in the last run, if any
+	UpdateTimestamp          int64     // latest update to this instance, unix timestamp in seconds
+	m                        sync.Mutex
+	telemetry                bool // do we want telemetry on this Check
 }
 
 // NewStats returns a new check stats instance
 func NewStats(c Check) *Stats {
 	stats := Stats{
-		CheckID:           c.ID(),
-		CheckName:         c.String(),
-		CheckVersion:      c.Version(),
-		CheckConfigSource: c.ConfigSource(),
-		telemetry:         telemetry_utils.IsCheckEnabled(c.String()),
+		CheckID:                  c.ID(),
+		CheckName:                c.String(),
+		CheckVersion:             c.Version(),
+		CheckConfigSource:        c.ConfigSource(),
+		telemetry:                telemetry_utils.IsCheckEnabled(c.String()),
+		EventPlatformEvents:      make(map[string]int64),
+		TotalEventPlatformEvents: make(map[string]int64),
 	}
 
 	// We are interested in a check's run state values even when they are 0 so we
@@ -145,6 +151,13 @@ func (cs *Stats) Add(t time.Duration, err error, warnings []error, metricStats m
 		cs.TotalServiceChecks += uint64(sc)
 		if cs.telemetry {
 			tlmServices.Add(float64(sc), cs.CheckName)
+		}
+	}
+	for k, v := range metricStats {
+		if strings.HasPrefix(k, eventPlatformEventPrefix) {
+			suffix := k[len(eventPlatformEventPrefix):]
+			cs.TotalEventPlatformEvents[suffix] = cs.TotalEventPlatformEvents[suffix] + v
+			cs.EventPlatformEvents[suffix] = v
 		}
 	}
 }

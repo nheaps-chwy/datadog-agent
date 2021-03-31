@@ -49,7 +49,9 @@ type metricStats struct {
 	Events           int64
 	ServiceChecks    int64
 	HistogramBuckets int64
-	Lock             sync.RWMutex
+	// EventPlatformEvents tracks the number of events submitted for each eventType
+	EventPlatformEvents map[string]int64
+	Lock                sync.RWMutex
 }
 
 // RawSender interface to submit samples to aggregator directly
@@ -221,6 +223,11 @@ func (s *checkSender) GetMetricStats() map[string]int64 {
 	metricStats["Events"] = s.priormetricStats.Events
 	metricStats["ServiceChecks"] = s.priormetricStats.ServiceChecks
 	metricStats["HistogramBuckets"] = s.priormetricStats.HistogramBuckets
+	if s.priormetricStats.EventPlatformEvents != nil {
+		for k, v := range s.priormetricStats.EventPlatformEvents {
+			metricStats["EventPlatformEvent_"+k] = v
+		}
+	}
 
 	return metricStats
 }
@@ -232,10 +239,12 @@ func (s *checkSender) cyclemetricStats() {
 	s.priormetricStats.Events = s.metricStats.Events
 	s.priormetricStats.ServiceChecks = s.metricStats.ServiceChecks
 	s.priormetricStats.HistogramBuckets = s.metricStats.HistogramBuckets
+	s.priormetricStats.EventPlatformEvents = s.metricStats.EventPlatformEvents
 	s.metricStats.MetricSamples = 0
 	s.metricStats.Events = 0
 	s.metricStats.ServiceChecks = 0
 	s.metricStats.HistogramBuckets = 0
+	s.metricStats.EventPlatformEvents = nil
 	s.metricStats.Lock.Unlock()
 	s.priormetricStats.Lock.Unlock()
 }
@@ -408,6 +417,12 @@ func (s *checkSender) EventPlatformEvent(rawEvent string, eventType string) {
 		rawEvent:  rawEvent,
 		eventType: eventType,
 	}
+	s.metricStats.Lock.Lock()
+	defer s.metricStats.Lock.Unlock()
+	if s.metricStats.EventPlatformEvents == nil {
+		s.metricStats.EventPlatformEvents = make(map[string]int64)
+	}
+	s.metricStats.EventPlatformEvents[eventType] = s.metricStats.EventPlatformEvents[eventType] + 1
 }
 
 // OrchestratorMetadata submit orchestrator metadata messages

@@ -469,7 +469,7 @@ func TestSubmitEventPlatformEvent(t *testing.T) {
 		},
 		{
 			"None, 'id', 'raw-event', 1",
-			"TypeError: argument 4 must be str, not int",
+			"TypeError: argument 4 must be (str|string), not int",
 		},
 	}
 
@@ -478,7 +478,11 @@ func TestSubmitEventPlatformEvent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if out != testCase.expectedOut {
+		matched, err := regexp.Match(testCase.expectedOut, []byte(out))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !matched {
 			t.Fatalf("wrong output. expected='%s', found='%s'", testCase.expectedOut, out)
 		}
 	}

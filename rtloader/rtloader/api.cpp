@@ -477,7 +477,6 @@ void set_submit_event_platform_event_cb(rtloader_t *rtloader, cb_submit_event_pl
     AS_TYPE(RtLoader, rtloader)->setSubmitEventPlatformEventCb(cb);
 }
 
-
 /*
  * datadog_agent API
  */

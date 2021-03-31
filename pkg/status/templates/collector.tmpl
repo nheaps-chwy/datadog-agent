@@ -33,13 +33,8 @@ Collector
       Total Runs: {{humanize .TotalRuns}}
       Metric Samples: Last Run: {{humanize .MetricSamples}}, Total: {{humanize .TotalMetricSamples}}
       Events: Last Run: {{humanize .Events}}, Total: {{humanize .TotalEvents}}
-      {{- if .TotalEventPlatformEvents }}
-      EventPlatformEvents:
       {{- range $k, $v := .TotalEventPlatformEvents }}
-        {{ $k }}: Last Run: {{humanize (index $instance.EventPlatformEvents $k) }}, Total: {{humanize $v}}
-      {{- end }}
-      {{- else }}
-      EventPlatformEvents: Last Run: 0, Total: 0
+      {{ $k }}: Last Run: {{humanize (index $instance.EventPlatformEvents $k) }}, Total: {{humanize $v}}
       {{- end }}
       Service Checks: Last Run: {{humanize .ServiceChecks}}, Total: {{humanize .TotalServiceChecks}}
       Average Execution Time : {{humanizeDuration .AverageExecutionTime "ms"}}

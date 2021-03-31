@@ -444,8 +444,8 @@ func runCheck(c check.Check, agg *aggregator.BufferedAggregator) *check.Stats {
 		t0 := time.Now()
 		err := c.Run()
 		warnings := c.GetWarnings()
-		mStats, _ := c.GetMetricStats()
-		s.Add(time.Since(t0), err, warnings, mStats)
+		sStats, _ := c.GetSenderStats()
+		s.Add(time.Since(t0), err, warnings, sStats)
 		if pause > 0 && i < times-1 {
 			time.Sleep(time.Duration(pause) * time.Millisecond)
 		}

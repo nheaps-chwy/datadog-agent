@@ -2,6 +2,8 @@ package epforwarder
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/DataDog/datadog-agent/pkg/logs/auditor"
 	"github.com/DataDog/datadog-agent/pkg/logs/client"
 	"github.com/DataDog/datadog-agent/pkg/logs/client/http"
@@ -10,11 +12,11 @@ import (
 	"github.com/DataDog/datadog-agent/pkg/logs/restart"
 	"github.com/DataDog/datadog-agent/pkg/logs/sender"
 	"github.com/DataDog/datadog-agent/pkg/util/log"
-	"strings"
 )
 
 const (
-	eventTypeDBMSample = "dbm-sample"
+	eventTypeDBMSamples = "dbm-samples"
+	eventTypeDBMMetrics = "dbm-metrics"
 )
 
 // An EventPlatformForwarder forwards Messages to a destination based on their event type
@@ -109,7 +111,7 @@ func joinHosts(endpoints []config.Endpoint) string {
 
 // newDbmSamplesPipeline creates a new "deep database monitoring" samples pipeline
 func newDbmSamplesPipeline(destinationsContext *client.DestinationsContext) (eventType string, p *passthroughPipeline, err error) {
-	eventType = eventTypeDBMSample
+	eventType = eventTypeDBMSamples
 	configKeys := config.LogsConfigKeys{
 		CompressionLevel:        "database_monitoring.samples.compression_level",
 		ConnectionResetInterval: "database_monitoring.samples.connection_reset_interval",
@@ -133,7 +135,7 @@ func newDbmSamplesPipeline(destinationsContext *client.DestinationsContext) (eve
 	if err != nil {
 		return eventType, nil, err
 	}
-	log.Debugf("Initialized event platform forwarder pipeline. eventType=%s mainHost=%s additionalHosts=%s batch_max_concurrent_send=%d", eventTypeDBMSample, endpoints.Main.Host, joinHosts(endpoints.Additionals), endpoints.BatchMaxConcurrentSend)
+	log.Debugf("Initialized event platform forwarder pipeline. eventType=%s mainHost=%s additionalHosts=%s batch_max_concurrent_send=%d", eventType, endpoints.Main.Host, joinHosts(endpoints.Additionals), endpoints.BatchMaxConcurrentSend)
 	return eventType, p, nil
 }
 

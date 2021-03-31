@@ -6,6 +6,7 @@
 package mocksender
 
 import (
+	"github.com/DataDog/datadog-agent/pkg/collector/check"
 	"github.com/DataDog/datadog-agent/pkg/metrics"
 	"github.com/DataDog/datadog-agent/pkg/serializer"
 )
@@ -95,10 +96,10 @@ func (m *MockSender) FinalizeCheckServiceTag() {
 	m.Called()
 }
 
-//GetMetricStats enables the get metric stats mock call.
-func (m *MockSender) GetMetricStats() map[string]int64 {
+//GetSenderStats enables the get metric stats mock call.
+func (m *MockSender) GetSenderStats() check.SenderStats {
 	m.Called()
-	return make(map[string]int64)
+	return check.NewSenderStats()
 }
 
 // OrchestratorMetadata submit orchestrator metadata messages

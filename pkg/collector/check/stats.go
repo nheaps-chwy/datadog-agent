@@ -6,7 +6,6 @@
 package check
 
 import (
-	"strings"
 	"sync"
 	"time"
 
@@ -15,10 +14,14 @@ import (
 )
 
 const (
-	runCheckFailureTag       = "fail"
-	runCheckSuccessTag       = "ok"
-	eventPlatformEventPrefix = "EventPlatformEvent_"
+	runCheckFailureTag = "fail"
+	runCheckSuccessTag = "ok"
 )
+
+var eventPlatformNameTranslations = map[string]string{
+	"dbm-samples": "Database Monitoring Query Samples",
+	"dbm-metrics": "Database Monitoring Query Metrics",
+}
 
 var (
 	tlmRuns = telemetry.NewCounter("checks", "runs",
@@ -34,6 +37,33 @@ var (
 	tlmExecutionTime = telemetry.NewGauge("checks", "execution_time",
 		[]string{"check_name"}, "Check execution time")
 )
+
+// SenderStats contains statistics showing the count of various types of telemetry sent by a check sender
+type SenderStats struct {
+	MetricSamples    int64
+	Events           int64
+	ServiceChecks    int64
+	HistogramBuckets int64
+	// EventPlatformEvents tracks the number of events submitted for each eventType
+	EventPlatformEvents map[string]int64
+}
+
+// NewSenderStats creates a new SenderStats
+func NewSenderStats() SenderStats {
+	return SenderStats{
+		EventPlatformEvents: make(map[string]int64),
+	}
+}
+
+// Copy creates a copy of the current SenderStats
+func (s SenderStats) Copy() (result SenderStats) {
+	result = s
+	result.EventPlatformEvents = make(map[string]int64)
+	for k, v := range s.EventPlatformEvents {
+		result.EventPlatformEvents[k] = v
+	}
+	return result
+}
 
 // Stats holds basic runtime statistics about check instances
 type Stats struct {
@@ -86,7 +116,7 @@ func NewStats(c Check) *Stats {
 }
 
 // Add tracks a new execution time
-func (cs *Stats) Add(t time.Duration, err error, warnings []error, metricStats map[string]int64) {
+func (cs *Stats) Add(t time.Duration, err error, warnings []error, metricStats SenderStats) {
 	cs.m.Lock()
 	defer cs.m.Unlock()
 
@@ -132,32 +162,34 @@ func (cs *Stats) Add(t time.Duration, err error, warnings []error, metricStats m
 	}
 	cs.UpdateTimestamp = time.Now().Unix()
 
-	if m, ok := metricStats["MetricSamples"]; ok {
-		cs.MetricSamples = m
-		cs.TotalMetricSamples += uint64(m)
+	if metricStats.MetricSamples > 0 {
+		cs.MetricSamples = metricStats.MetricSamples
+		cs.TotalMetricSamples += uint64(metricStats.MetricSamples)
 		if cs.telemetry {
-			tlmMetricsSamples.Add(float64(m), cs.CheckName)
+			tlmMetricsSamples.Add(float64(metricStats.MetricSamples), cs.CheckName)
 		}
 	}
-	if ev, ok := metricStats["Events"]; ok {
-		cs.Events = ev
-		cs.TotalEvents += uint64(ev)
+	if metricStats.Events > 0 {
+		cs.Events = metricStats.Events
+		cs.TotalEvents += uint64(metricStats.Events)
 		if cs.telemetry {
-			tlmEvents.Add(float64(ev), cs.CheckName)
+			tlmEvents.Add(float64(metricStats.Events), cs.CheckName)
 		}
 	}
-	if sc, ok := metricStats["ServiceChecks"]; ok {
-		cs.ServiceChecks = sc
-		cs.TotalServiceChecks += uint64(sc)
+	if metricStats.ServiceChecks > 0 {
+		cs.ServiceChecks = metricStats.ServiceChecks
+		cs.TotalServiceChecks += uint64(metricStats.ServiceChecks)
 		if cs.telemetry {
-			tlmServices.Add(float64(sc), cs.CheckName)
+			tlmServices.Add(float64(metricStats.ServiceChecks), cs.CheckName)
 		}
 	}
-	for k, v := range metricStats {
-		if strings.HasPrefix(k, eventPlatformEventPrefix) {
-			suffix := k[len(eventPlatformEventPrefix):]
-			cs.TotalEventPlatformEvents[suffix] = cs.TotalEventPlatformEvents[suffix] + v
-			cs.EventPlatformEvents[suffix] = v
+	cs.EventPlatformEvents = make(map[string]int64)
+	for k, v := range metricStats.EventPlatformEvents {
+		// translate event types into more descriptive names
+		if humanName, ok := eventPlatformNameTranslations[k]; ok {
+			k = humanName
 		}
+		cs.TotalEventPlatformEvents[k] = cs.TotalEventPlatformEvents[k] + v
+		cs.EventPlatformEvents[k] = v
 	}
 }

@@ -36,22 +36,12 @@ type Sender interface {
 	HistogramBucket(metric string, value int64, lowerBound, upperBound float64, monotonic bool, hostname string, tags []string)
 	Event(e metrics.Event)
 	EventPlatformEvent(rawEvent string, eventType string)
-	GetMetricStats() map[string]int64
+	GetSenderStats() check.SenderStats
 	DisableDefaultHostname(disable bool)
 	SetCheckCustomTags(tags []string)
 	SetCheckService(service string)
 	FinalizeCheckServiceTag()
 	OrchestratorMetadata(msgs []serializer.ProcessMessageBody, clusterID, payloadType string)
-}
-
-type metricStats struct {
-	MetricSamples    int64
-	Events           int64
-	ServiceChecks    int64
-	HistogramBuckets int64
-	// EventPlatformEvents tracks the number of events submitted for each eventType
-	EventPlatformEvents map[string]int64
-	Lock                sync.RWMutex
 }
 
 // RawSender interface to submit samples to aggregator directly
@@ -66,8 +56,9 @@ type checkSender struct {
 	id                      check.ID
 	defaultHostname         string
 	defaultHostnameDisabled bool
-	metricStats             metricStats
-	priormetricStats        metricStats
+	metricStats             check.SenderStats
+	priormetricStats        check.SenderStats
+	metricStatsLock         sync.RWMutex
 	smsOut                  chan<- senderMetricSample
 	serviceCheckOut         chan<- metrics.ServiceCheck
 	eventOut                chan<- metrics.Event
@@ -119,8 +110,8 @@ func newCheckSender(id check.ID, defaultHostname string, smsOut chan<- senderMet
 		smsOut:             smsOut,
 		serviceCheckOut:    serviceCheckOut,
 		eventOut:           eventOut,
-		metricStats:        metricStats{},
-		priormetricStats:   metricStats{},
+		metricStats:        check.NewSenderStats(),
+		priormetricStats:   check.NewSenderStats(),
 		histogramBucketOut: bucketOut,
 		orchestratorOut:    orchestratorOut,
 		eventPlatformOut:   eventPlatformOut,
@@ -214,39 +205,17 @@ func (s *checkSender) Commit() {
 	s.cyclemetricStats()
 }
 
-func (s *checkSender) GetMetricStats() map[string]int64 {
-	s.priormetricStats.Lock.RLock()
-	defer s.priormetricStats.Lock.RUnlock()
-
-	metricStats := make(map[string]int64)
-	metricStats["MetricSamples"] = s.priormetricStats.MetricSamples
-	metricStats["Events"] = s.priormetricStats.Events
-	metricStats["ServiceChecks"] = s.priormetricStats.ServiceChecks
-	metricStats["HistogramBuckets"] = s.priormetricStats.HistogramBuckets
-	if s.priormetricStats.EventPlatformEvents != nil {
-		for k, v := range s.priormetricStats.EventPlatformEvents {
-			metricStats["EventPlatformEvent_"+k] = v
-		}
-	}
-
-	return metricStats
+func (s *checkSender) GetSenderStats() (metricStats check.SenderStats) {
+	s.metricStatsLock.RLock()
+	defer s.metricStatsLock.RUnlock()
+	return s.priormetricStats.Copy()
 }
 
 func (s *checkSender) cyclemetricStats() {
-	s.metricStats.Lock.Lock()
-	s.priormetricStats.Lock.Lock()
-	s.priormetricStats.MetricSamples = s.metricStats.MetricSamples
-	s.priormetricStats.Events = s.metricStats.Events
-	s.priormetricStats.ServiceChecks = s.metricStats.ServiceChecks
-	s.priormetricStats.HistogramBuckets = s.metricStats.HistogramBuckets
-	s.priormetricStats.EventPlatformEvents = s.metricStats.EventPlatformEvents
-	s.metricStats.MetricSamples = 0
-	s.metricStats.Events = 0
-	s.metricStats.ServiceChecks = 0
-	s.metricStats.HistogramBuckets = 0
-	s.metricStats.EventPlatformEvents = nil
-	s.metricStats.Lock.Unlock()
-	s.priormetricStats.Lock.Unlock()
+	s.metricStatsLock.Lock()
+	defer s.metricStatsLock.Unlock()
+	s.priormetricStats = s.metricStats.Copy()
+	s.metricStats = check.NewSenderStats()
 }
 
 // SendRawMetricSample sends the raw sample
@@ -277,9 +246,9 @@ func (s *checkSender) sendMetricSample(metric string, value float64, hostname st
 
 	s.smsOut <- senderMetricSample{s.id, metricSample, false}
 
-	s.metricStats.Lock.Lock()
+	s.metricStatsLock.Lock()
 	s.metricStats.MetricSamples++
-	s.metricStats.Lock.Unlock()
+	s.metricStatsLock.Unlock()
 }
 
 // Gauge should be used to send a simple gauge value to the aggregator. Only the last value sampled is kept at commit time.
@@ -353,9 +322,9 @@ func (s *checkSender) HistogramBucket(metric string, value int64, lowerBound, up
 
 	s.histogramBucketOut <- senderHistogramBucket{s.id, histogramBucket}
 
-	s.metricStats.Lock.Lock()
+	s.metricStatsLock.Lock()
 	s.metricStats.HistogramBuckets++
-	s.metricStats.Lock.Unlock()
+	s.metricStatsLock.Unlock()
 }
 
 // Historate should be used to create a histogram metric for "rate" like metrics.
@@ -388,9 +357,9 @@ func (s *checkSender) ServiceCheck(checkName string, status metrics.ServiceCheck
 
 	s.serviceCheckOut <- serviceCheck
 
-	s.metricStats.Lock.Lock()
+	s.metricStatsLock.Lock()
 	s.metricStats.ServiceChecks++
-	s.metricStats.Lock.Unlock()
+	s.metricStatsLock.Unlock()
 }
 
 // Event submits an event
@@ -405,9 +374,9 @@ func (s *checkSender) Event(e metrics.Event) {
 
 	s.eventOut <- e
 
-	s.metricStats.Lock.Lock()
+	s.metricStatsLock.Lock()
 	s.metricStats.Events++
-	s.metricStats.Lock.Unlock()
+	s.metricStatsLock.Unlock()
 }
 
 // Event submits an event
@@ -417,11 +386,8 @@ func (s *checkSender) EventPlatformEvent(rawEvent string, eventType string) {
 		rawEvent:  rawEvent,
 		eventType: eventType,
 	}
-	s.metricStats.Lock.Lock()
-	defer s.metricStats.Lock.Unlock()
-	if s.metricStats.EventPlatformEvents == nil {
-		s.metricStats.EventPlatformEvents = make(map[string]int64)
-	}
+	s.metricStatsLock.Lock()
+	defer s.metricStatsLock.Unlock()
 	s.metricStats.EventPlatformEvents[eventType] = s.metricStats.EventPlatformEvents[eventType] + 1
 }
 
